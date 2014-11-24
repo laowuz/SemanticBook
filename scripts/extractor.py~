@@ -1,0 +1,169 @@
+#! /usr/bin/python
+import os,re
+import ToCdetection
+from xml.dom.minidom import parseString
+class BookChapter:
+  def __init__(self, number, title, page_no, start_line):
+    self.chapter_number = number
+    self.title = title
+    self.page_number = page_no
+    self.start_line = start_line
+    self.subchapters = []
+    self.pre_chapter = None
+    self.next_chapter = None
+
+  def setPreChapter(self, pre):
+    self.pre_chapter = pre
+
+  def setNextChapter(self, next):
+    self.next_chapter = next
+
+  def addSubchapter(chapter):
+    self.subchapters.append(chapter)
+
+
+class BookDoc:
+  def __init__(self, file_name, doc_path, xml_path):
+    self.file_name = file_name
+    self.file_path = doc_path+os.sep+file_name
+    self.text = open(self.file_path).read()
+    self.xml_dom = parseString(open(xml_path+os.sep+file_name.replace('txt','xml')).read())
+    self.lines = re.split('\n+',self.text.replace('\x0c','\n'))
+    self.ToC = ToCdetection.ToC_detection(self.file_path)
+    self.chapters = []
+    self.dic_chapter = {}
+   
+  def getToC(self):
+    return self.ToC
+  def getChapters(self):
+    return self.chapters
+ 
+  def getHierachy(self):
+    if self.ToC is None:
+      return False
+    toc,toc_begin,toc_end = self.ToC
+    i = 0
+    start_line_number = toc_end+1
+    for i in range(0,len(toc)):
+      words = re.split('\W+',toc[i])
+      if len(words) < 3:
+        continue
+      if len(words) == 3:
+        if words[0].isdigit() and words[1].isdigit() and words[2].isdigit() and i < len(toc)-1:
+          if len(toc[i+1])<2 or re.split('\W+',toc[i+1])[0].isdigit():
+            continue
+      if words[0].isdigit():
+        if words[-1].isdigit() is False and i < len(toc)-1:
+          if re.split('\W+',toc[i+1])[-1].isdigit() and len(toc[i+1])>2:
+            words.extend(re.split('\W+',toc[i+1]))
+        #print words
+        chapter_number = words[0]
+        page_number = words[-1]
+        title = words[1:-1]
+        if words[1].isdigit():
+          chapter_number = chapter_number+'.'+words[1]
+          title = words[2:-1]
+          if words[2].isdigit():
+            chapter_number = chapter_number+'.'+words[2]
+            title = words[3:-1]
+            if words[3].isdigit():
+              chapter_number = chapter_number+'.'+words[3]
+              title = words[4:-1]
+        line_number = self.searchChapter(toc[i], start_line_number)
+        if line_number > start_line_number:
+          start_line_number = line_number+1
+          chapter = BookChapter(chapter_number, ' '.join(title), page_number, line_number)
+          self.chapters.append(chapter)
+          self.dic_chapter[chapter_number] = chapter
+         # print chapter_number
+    return True
+
+  def searchChapter(self, title, start_line):
+    i = start_line
+    words = []
+    title = title.lower()
+    f = title.find(' ')
+    number = title[0:f]
+    if number.endswith('.'):
+      number = number[0:-1]
+    words.append(number)
+    words.extend(re.split('\W+',title[f+1:-1])[0:-1])
+    #print i,words
+    ff = 0
+    while i < len(self.lines)-1:
+      l = self.lines[i].lower()
+      ff = l.find(words[0])
+      if ff >= 0:
+        l = l+self.lines[i+1].lower()
+        c = 0
+        for w in words[1:len(words)]:
+          f1 = ff
+          ff = l.find(w,f1)
+          if ff > f1:
+            c = c+1
+        if c >= len(words)/2:
+          #print "line:",i
+          return i
+      i = i + 1
+    return -1
+    
+  def writeXML(self):
+    fw = open(self.file_path+r'.xml','w')
+    fw.write('<add>\n  <doc>\n')
+    fw.write('  <field name="id">'+self.file_name.strip('txt')+'</field>\n')
+    j = 0
+    for j in range(len(self.chapters)):
+      chapter = self.chapters[j]
+      #print chapter.start_line, chapter.page_number, chapter.chapter_number,chapter.title
+      fw.write('  <field name="title">')
+      fw.write(chapter.chapter_number+' '+chapter.title+'</field>\n')
+      #if j < len(self.chapters)-1:
+       # fw.write('\n'.join(self.lines[chapter.start_line:self.chapters[j+1].start_line]))
+      #else:
+       # fw.write('\n'.join(self.lines[chapter.start_line:-1]))
+      j = j + 1
+    fw.write('  </doc>\n</add>\n')
+
+  def getCiatations(self):
+    #simply extract the ciations from citeseer xml
+    return ''
+  def getAuthors(self):
+    #extract the authors from citeseer xml
+    nodes = self.xml_dom.getElementsByTagName('authors')[0].childNodes
+    authors = []
+    for node in nodes:
+      author_name = node.getElementsByTagName('name')[0].childNodes[0].data
+      affil = node.getElementsByTagName('affil')[0].childNodes[0].data
+      authors.append((author_name,affil))
+    return authors
+  def getAbstract(self):
+    return self.xml_dom.getElementsByTagName('abstract')[0].childNodes[0].data
+  def getIndex(self):
+    return ''
+  def getISBN(self):
+    return ''
+  def getName(self):
+    name = self.xml_dom.getElementsByTagName('title')[0].childNodes[0].data
+    return name
+  def getPublisher(self):
+    return ''
+
+#print ToCdetection.ToC_detection(r'/home/zzw109/project/book/test/10.1.1.193.87.txt')//TOC extraction incorrect!!!
+testfile = r'10.1.1.139.2500.txt'
+test_dir = r'/home/zzw109/project/book/allbookstxt'
+xml_dir = r'/home/zzw109/project/book/xml'
+book = BookDoc(testfile, test_dir, xml_dir)
+print book.getName()
+print book.getAuthors()
+while True:
+  continue
+for file in os.listdir(test_dir):
+  print file
+  book = BookDoc(file, test_dir, xml_dir)
+  try:
+    book.getHierachy()
+  except IndexError:
+    print "Index error"
+    continue
+  if len(book.getChapters())>0:
+    book.writeXML()

@@ -1,0 +1,77 @@
+#! /usr/bin/python
+
+import re,sys
+
+def extractISBN(text):
+    isbn = []
+    p_isbn10 = re.compile('isbn(10|-10)?:?[\s]{0,5}([\d-xX]{13})',re.I)
+    p_isbn13 = re.compile('isbn(13|-13)?:?[\s]{0,5}([\d-xX]{17})',re.I)
+    r1 = re.search(p_isbn10,text)
+    r2 = re.search(p_isbn13,text)
+    if r1 is not None:
+        isbn.append(r1.group(2))
+    if r2 is not None:
+        isbn.append(r2.group(2))
+    return isbn
+
+
+
+def extractTitle(text, pages_index, contents_page):
+    titlecands = []
+    for i in range(contents_page-1):
+	    print i
+	    page_i = text[pages_index[i]:pages_index[i+1]]
+	    candidates = re.findall('<span style=".*?font-size:(\d\d)px">(.*?)<br></span>',page_i,re.S)
+	    if len(candidates) == 0:
+	        continue
+	    modules = []
+	    max_size = 0
+	    j,max_j = 0,0
+	    #print candidates
+	    #find the candidate of max font size
+	    for cand in candidates:
+	        fontsize,txt = int(cand[0]),cand[1]
+	        if fontsize > max_size and re.search('\S',txt) is not None:
+	            max_size = fontsize
+	            max_j = j
+	        j = j + 1
+	        words = []
+	        f1 = txt.find('</span>')
+	        if f1 != -1:#with sub-spans
+	            words.append(txt[:f1])
+	            #merge the sub-spans
+	            words.extend(re.findall('<span.*?>(.*?)</span>',txt))
+	            if txt.rfind('>') != -1:
+	                words.append(txt[txt.rfind('>')+1:])
+	            if len(words)>1:
+	                txt = ''.join(words)
+	        else:#no sub-spans but mutiple lines
+	            txt = txt.replace('\n<br>',' ')
+	            #print txt
+	        modules.append((fontsize,txt.strip()))
+	    title = modules[max_j][1]
+	    if title.endswith(':') and max_j < len(modules)-1:
+	        title = title + modules[max_j+1][1]
+            if max_j < len(modules)-1 and modules[max_j+1][0] == modules[max_j][0]:
+                title = title + ' ' + modules[max_j+1][1]
+	    print 'modules',modules
+	    titlecands.append((modules[max_j][0],title))
+    return titlecands
+
+
+
+html_file = sys.argv[1]
+#html_file = r'../goodbooks/books/10.1.1.115.1881.pdf.html'
+
+text = open(html_file).read()
+pages = re.findall('<a name="\d{1,2}">Page \d{1,2}</a>',text)
+pages_index = [text.find(page) for page in pages] 
+contents_search = re.search(re.compile('(contents|table of contents).*?<a name="\d{1,2}">Page (\d{1,2})</a>',re.I|re.S),text[:pages_index[len(pages_index)-1]])
+contents_page = -1
+if contents_search is not None:
+    contents_page = int(contents_search.group(2))-1
+print pages_index,contents_page
+isbn = extractISBN(text[pages_index[0]:pages_index[8]])
+print 'ISBN:',isbn
+l = extractTitle(text, pages_index, contents_page)
+print 'title:',l

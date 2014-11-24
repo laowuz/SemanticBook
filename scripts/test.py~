@@ -1,0 +1,13 @@
+#! /usr/bin/python
+
+import os,subprocess
+
+for f in os.listdir(r'/home/zzw109/project/book/intech'):
+  if f.endswith('.zip'):
+    print f
+    subprocess.call('unzip',f)
+if 0:
+	pre_url = r'http://books.google.com/ebooks?id='
+	ids = open(r'/home/zzw109/project/book/googleid.txt').read().split()
+	urls = [pre_url+bookid for bookid in ids]
+	open(r'/home/zzw109/project/book/freebooksulrs.txt','w').write('\n'.join(urls))
